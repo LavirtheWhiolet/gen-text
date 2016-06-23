@@ -1,0 +1,59 @@
+#!/usr/bin/ruby
+require 'gen_text'
+require 'gen_text/compile'
+require 'restorable_output/memory_buffered'
+require 'restorable_output/non_restorable'
+
+def usage
+  puts <<-TEXT
+Usage: #{File.basename __FILE__} [-h|--help] [grammar]
+
+Reads grammar and generates random text from it.
+
+If the grammar file is not specified the the grammar is read from standard
+input.
+
+Options:
+     -h, --help             Show this message and exit
+
+TEXT
+end
+
+$grammar = :stdin
+until ARGV.empty?
+  case x = ARGV.shift
+  when "-h", "--help"
+    usage
+    exit
+  else
+    $grammar = x
+  end
+end
+$grammar =
+  begin
+    case $grammar
+    when :stdin then STDIN.read
+    else File.read($grammar)
+    end
+  rescue IOError => e
+    abort e.message
+  end
+class_code =
+  begin
+    GenText::Compile.new.($grammar)
+  rescue Parse::Error => e
+    abort "error: #{e.pos.file}:#{e.pos.line+1}:#{e.pos.column+1}: #{e.message}"
+  end
+gen_text = eval(class_code).new
+output =
+  if gen_text.may_restore_output?
+  then RestorableOutput::MemoryBuffered.new(STDOUT)
+  else RestorableOutput::NonRestorable.new(STDOUT)
+  end
+generated_ok =
+  begin
+    gen_text.(output)
+  ensure
+    output.close
+  end
+abort "This grammar produces no texts." if not generated_ok
