@@ -73,7 +73,7 @@ class GenText
   # 
   # It returns false if +weights_and_actions+ is empty.
   # 
-  # @param [Array<Array<(Numeric, Proc)>>] weights_and_actions
+  # @param [Array<Array<(Numeric, Proc<Boolean>)>>] weights_and_actions
   # @return [Boolean] what the chosen action returns.
   # 
   def weighed_choice(weights_and_actions)
