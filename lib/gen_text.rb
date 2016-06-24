@@ -1,6 +1,6 @@
 require 'restorable_output'
 
-class GenText
+module GenText
   
   # Generates some text and writes it to +out+.
   # 

@@ -1,8 +1,7 @@
 require 'parse'
-require 'to_unique_name'
-require 'gen_text'
+require 'gen_text/vm'
 
-class GenText
+module GenText
   
   class Compile < Parse
     
@@ -17,52 +16,26 @@ class GenText
     # ---- AST & Code Generation ----
     
     # @!visibility private
-    Symbols = Struct.new :to_method_name
+    Context = Struct.new :rule_scope, :rule_labels
     
     Program = ASTNode.new :rules, :top_expr do
       
-      def to_code
-        # Convert rule names to method names.
-        # Check for rules duplicates.
-        to_method_name = ToUniqueName.new("__rule")
-        begin
+      def to_vm_code
+        rule_labels = {}; begin
           rules.each do |rule|
-            raise Parse::Error.new(rule.pos, "rule #{rule.name} is defined twice") if to_method_name.has_key? rule.name
-            to_method_name.put(rule.name)
+            raise Parse::Error.new(rule.pos, "rule `#{rule.name} is defined twice") if rule_labels.has_key? rule.name
+            rule_labels[rule.name] = VM::Label.new
           end
         end
-        # 
-        symbols = Symbols[to_method_name]
-        # Generate the code.
-        return (
-          "Class.new(GenText) do\n"<<
-          "  \n"<<
-          "  def call0\n"<<
-          "    __rule_scope__ = binding\n"<<
-          "    #{top_expr.to_code(symbols)} and\n"<<
-          "    #{
-                 if rules.empty?
-                 then "true"
-                 else RuleCall[rules.first.name].to_code(symbols)
-                 end
-               }\n"<<
-          "  end\n"<<
-          "  \n"<<
-          "  #{
-              rules.map do |rule|
-                "def #{symbols.to_method_name.(rule.name)}\n"<<
-                "  __rule_scope__ = binding\n"<<
-                "  #{rule.body.to_code(symbols)}\n"<<
-                "end"
-              end.join("\n")
-            }\n"<<
-          "  \n"<<
-          "  def may_restore_output?\n"<<
-          "    #{may_restore_output?.to_rb}\n"<<
-          "  end\n"<<
-          "  \n"<<
-          "end"
-        )
+        code = rules.map do |rule|
+          [
+            rule_labels[rule.name],
+            *rule.body.to_vm_code(Context.new(new_binding, rule_labels)),
+            lambda do |vm|
+              vm.pc = vm.stack.pop
+            end
+          ]
+        end.reduce(:concat)
       end
       
       def may_restore_output?
@@ -70,12 +43,24 @@ class GenText
         rules.map(&:body).any? { |b| b.may_restore_output? }
       end
       
+      private
+      
+      # @return [Binding]
+      def new_binding
+        binding
+      end
+      
     end
     
     GenString = ASTNode.new :string do
       
-      def to_code(symbols)
-        "gen(#{string.to_rb})"
+      def to_vm_code(context)
+        [
+          lambda do |vm|
+            vm.out.write(string)
+            vm.pc += 1
+          end
+        ]
       end
       
       def may_restore_output?
@@ -86,8 +71,13 @@ class GenText
     
     GenNumber = ASTNode.new :from, :to do
       
-      def to_code(symbols)
-        "gen(rand(#{from}..#{to}))"
+      def to_vm_code(context)
+        [
+          lambda do |vm|
+            vm.out.write(rand(from..to))
+            vm.pc += 1
+          end
+        ]
       end
       
       def may_restore_output?
@@ -98,11 +88,86 @@ class GenText
     
     Repeat = ASTNode.new :subexpr, :from_times, :to_times do
       
-      def to_code(symbols)
+      def to_vm_code(context)
         raise Parse::Error.new(pos, "`from' can not be greater than `to'") if from_times > to_times
-        "repeat(#{from_times.to_rb}, #{to_times.to_rb}, &lambda do \n"<<
-        "  #{subexpr.to_code(symbols)} \n"<<
-        "end)"
+        # 
+        subexpr_code = subexpr.to_vm_code(context)
+        # Mandatory part (0...from_times).
+        if from_times > 0 then
+          loop1 = VM::Label.new
+          loop1_end = VM::Label.new
+          [
+            lambda do |vm|
+              vm.stack.push counter = from_time
+              vm.pc += 1
+            end,
+            loop1,
+            lambda do |vm|
+              if vm.stack.last == 0 then
+                vm.stack.pop # counter
+                vm.pc = loop1_end.address
+              else
+                vm.stack[-1] -= 1
+                vm.pc += 1
+              end
+            end,
+            *subexpr_code,
+            lambda { |vm| vm.pc = loop1.address },
+            loop1_end
+          ]
+        else
+          []
+        end +
+        # Optional part (from_times...to_times)
+        if (to_times - from_times) < INF
+          loop2 = VM::Label.new
+          loop2_end = VM::Label.new
+          [
+            lambda do |vm|
+              vm.stack.push counter = rand(to_times - from_times + 1)
+              vm.pc += 1
+            end,
+            loop2,
+            lambda do |vm|
+              if vm.stack.last == 0 then
+                vm.pc = loop2_end.address
+              else
+                vm.push_rescue_point(loop2_end.address)
+                vm.pc += 1
+              end
+            end,
+            *subexpr_code,
+            lambda do |vm|
+              vm.pop # rescue point
+              vm.pc = loop2.address
+            end,
+            loop2_end,
+            lambda do |vm|
+              vm.stack.pop # counter
+              vm.pc += 1
+            end
+          ]
+        else
+          loop2 = VM::Label.new
+          loop2_end = VM::Label.new
+          [
+            loop2,
+            lambda do |vm|
+              if rand >= 0.5 then
+                vm.pc = loop2_end.address
+              else
+                vm.push_rescue_point(loop2_end.address)
+                vm.pc += 1
+              end
+            end,
+            *subexpr_code,
+            lambda do |vm|
+              vm.pop # rescue point
+              vm.pc = loop2.address
+            end,
+            loop2_end
+          ]
+        end
       end
       
       def may_restore_output?
@@ -113,8 +178,15 @@ class GenText
     
     GenCode = ASTNode.new :to_s do
       
-      def to_code(symbols)
-        "gen(__rule_scope__.eval(#{self.to_s.to_rb}, #{pos.file.to_rb}, #{pos.line.to_rb}))"
+      def to_vm_code(context)
+        rule_scope = context.rule_scope
+        [
+          lambda do |vm|
+            data = rule_scope.eval(self.to_s, pos.file, pos.line+1)
+            vm.out.write(data)
+            vm.pc += 1
+          end
+        ]
       end
       
       def may_restore_output?
@@ -125,8 +197,18 @@ class GenText
     
     CheckCode = ASTNode.new :to_s do
       
-      def to_code(symbols)
-        "__rule_scope__.eval(#{self.to_s.to_rb}, #{pos.file.to_rb}, #{pos.line.to_rb})"
+      def to_vm_code(context)
+        rule_scope = context.rule_scope
+        [
+          lambda do |vm|
+            check_passed = rule_scope.eval(self.to_s, pos.file, pos.line+1)
+            if check_passed then
+              vm.pc += 1
+            else
+              vm.rescue_ or raise Parse::Error.new(pos, "check failed")
+            end
+          end
+        ]
       end
       
       def may_restore_output?
@@ -137,11 +219,14 @@ class GenText
     
     ActionCode = ASTNode.new :to_s do
       
-      def to_code(symbols)
-        "begin \n"<<
-        "  gen(__rule_scope__.eval(#{self.to_s.to_rb}, #{pos.file.to_rb}, #{pos.line.to_rb})) \n"<<
-        "  true \n"<<
-        "end"
+      def to_vm_code(context)
+        rule_scope = context.rule_scope
+        [
+          lambda do |vm|
+            rule_scope.eval(self.to_s, pos.file, pos.line+1)
+            vm.pc += 1
+          end
+        ]
       end
       
       def may_restore_output?
@@ -152,9 +237,14 @@ class GenText
     
     RuleCall = ASTNode.new :name do
       
-      def to_code(symbols)
-        raise Parse::Error.new(pos, "rule `#{name}' is not defined") unless symbols.to_method_name.has_key? name
-        "#{symbols.to_method_name.(name)}()"
+      def to_vm_code(context)
+        label = context.rule_labels[name] or raise Parse::Error.new(pos, "rule `#{name}' not defined")
+        [
+          lambda do |vm|
+            vm.stack.push vm.pc
+            vm.pc = label.address
+          end
+        ]
       end
       
       def may_restore_output?
@@ -165,8 +255,8 @@ class GenText
     
     Choice = ASTNode.new :alternatives do
       
-      def to_code(symbols)
-        # Calculate alternatives' weights.
+      def to_vm_code(context)
+        # Populate alternatives' weights.
         if alternatives.map(&:probability).all? { |x| x == :auto } then
           alternatives.each { |a| a.weight = 1 }
         else
@@ -183,36 +273,83 @@ class GenText
               end
           end
         end
+        # Populate alternatives' labels.
+        alternatives.each { |a| a.label = VM::Label.new }
         # Generate the code.
-        "weighed_choice([ \n"<<
-        "#{
-          alternatives.map do |a|
-            "[#{a.weight.to_rb}, lambda do \n #{a.subexpr.to_code(symbols)} \n end]"
-          end.join(",\n")
-        }])"
+        initial_weights_and_labels = alternatives.map { |a| [a.weight, a.label] }
+        end_label = VM::Label.new
+        [
+          lambda do |vm|
+            vm.push initial_weights_and_labels.dup
+            vm.pc += 1
+          end,
+          lambda do |vm|
+            weights_and_labels = vm.stack.last
+            vm.push_rescue_point
+            # If no alternatives left...
+            if weights_and_labels.size == 1 then
+              _, label = *weights_and_labels.first
+              vm.pc = label
+            # If there are alternatives...
+            else
+              chosen_weight_and_label = sample_weighed(weights_and_labels)
+              weights_and_labels.delete chosen_weight_and_label
+              _, chosen_label = *chosen_weight_and_label
+              vm.pc = chosen_label
+            end
+          end,
+          *alternatives.map do |alternative|
+            [
+              alternative.label,
+              *alternative.subexpr.to_vm_code(context),
+              lambda { |vm| vm.pc = end_label }
+            ]
+          end.reduce(:concat),
+          end_label,
+          lambda do |vm|
+            vm.stack.pop # rescue_point
+            vm.stack.pop # weights_and_labels
+          end
+        ]
       end
       
       def may_restore_output?
         alternatives.map(&:subexpr).any?(&:may_restore_output?)
       end
       
+      private
+      
+      # @param [Array<Array<(Numeric, Object)>>] weights_and_items
+      # @return [Array<(Numeric, Object)>]
+      def sample_weighed(weights_and_items)
+        weight_sum = weights_and_item.map(&:first).reduce(:+)
+        chosen_partial_weight_sum = rand(0...weight_sum)
+        current_partial_weight_sum = 0
+        weights_and_items.find do |weight, item|
+          current_partial_weight_sum += weight
+          current_partial_weight_sum > chosen_partial_weight_sum
+        end or
+        weights_and_items.last
+      end
+      
     end
     
     ChoiceAlternative = ASTNode.new :probability, :subexpr do
       
-      # Used by {Choice#to_code} only.
+      # Used by {Choice#to_vm_code} only.
+      # @return [Numeric]
       attr_accessor :weight
+      
+      # Used by {Choice#to_vm_code} only.
+      # @return [VM::Label]
+      attr_accessor :label
       
     end
     
     Seq = ASTNode.new :subexprs do
       
-      def to_code(symbols)
-        return "true" if subexprs.empty?
-        # 
-        "begin\n"<<
-        "  #{subexprs.map { |e| "#{e.to_code(symbols)}" }.join(" and ")}\n"<<
-        "end"
+      def to_vm_code(context)
+        subexprs.map { |subexpr| subexpr.to_vm_code(context) }.reduce(:concat)
       end
       
       def may_restore_output?
@@ -234,7 +371,7 @@ class GenText
       _(Program[
         rules_and_action_codes.select { |x| x.is_a? RuleDefinition },
         _(Seq[rules_and_action_codes.select { |x| not x.is_a? RuleDefinition }])
-      ]).to_code
+      ]).to_vm_code
     end
     
     rule :expr do

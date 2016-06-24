@@ -38,12 +38,14 @@ $grammar =
   rescue IOError => e
     abort e.message
   end
-class_code =
+code =
   begin
     GenText::Compile.new.($grammar)
   rescue Parse::Error => e
     abort "error: #{e.pos.file}:#{e.pos.line+1}:#{e.pos.column+1}: #{e.message}"
   end
+puts code
+exit
 gen_text = eval(class_code).new
 output =
   if gen_text.may_restore_output?
