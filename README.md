@@ -3,15 +3,6 @@ Description
 
 A generator of texts from EBNF-like grammars.
 
-Features
---------
-
-- **Repetition, alteration, left recursion**. All features of EBNF are supported.
-- **Probability management**. You may generate strings of 90% of "a"-s and 10% of "b"-s.
-- **Code insertions**. Execute arbitrary code while generating the text.
-- **Conditional generation**. Wanna cut some alternatives? No problem, write conditions in Ruby and you will never get the wrong texts again!
-- **Virtual machine**. You may compile your grammar into some bytecode which may then be compiled to C!
-
 Install
 -------
 
@@ -60,7 +51,7 @@ You may use the following expressions in the right part:
     </tr>
     <tr>
       <td><tt>U+HHHH</tt></td>
-      <td>Generate an UTF-8 character sequence corresponding to the Unicode code. E. g.: <tt>U+000D</tt>.</td>
+      <td>Generate an UTF-8 character sequence corresponding to the Unicode code. E. g.: <tt>U+000A</tt> is equivalent to <tt>"\n"</tt>.</td>
     </tr>
     <tr>
       <td><tt>n</tt> (a number)</td>
@@ -106,8 +97,7 @@ You may use the following expressions in the right part:
       </td>
       <td>
         <p>Random choice with specific probabilities.</p>
-        
-        <p>The alternatives with unspecified probability have their probability calculated automatically.</p>
+        <p>If probability is unspecified then it is calculated automatically.</p>
       </td>
     </tr>
     <tr>
@@ -139,33 +129,34 @@ You may use the following expressions in the right part:
           <li>exactly <tt>n</tt> times</li>
           <li>between <tt>m</tt> and <tt>n</tt> times</li>
         </ul>
-        <p><em>Note:</em> you may use <tt>inf</tt> ("infinity") instead of <tt>m</tt> or <tt>n</tt>.</p>
+        <p><strong>Note:</strong> you may use <tt>inf</tt> ("infinity") instead of <tt>m</tt> or <tt>n</tt>.</p>
       </td>
     </tr>
     <tr>
-      <td colspan="2"><center><strong>Code insertions</strong></center></td>
+      <td colspan="2"><center><strong>Ruby code insertions</strong></center></td>
     </tr>
     <tr>
       <td><tt>{ code }</tt></td>
       <td>
-        <p>Execute the Ruby code when the generation reaches this expression.</p>
-        <p><em>Note</em>: All code insertions inside a rule are executed in the same scope.</p>
+        <p>Execute the code. Generate nothing.</p>
+        <p><strong>Note</strong>: all code insertions inside a rule share the same scope.</p>
       </td>
     </tr>
     <tr>
       <td><tt>{= code }</tt></td>
-      <td>Generate a string returned by the Ruby code.</td>
+      <td>Generate a string returned by the code.</td>
     </tr>
     <tr>
       <td><tt>{? code }</tt></td>
       <td>
-        <p>The code must evaluate to true when the generation reaches this expression.</p>
-        
-        <p><em>Note</em>: presence of this expression turns on output buffering and backtracking and may result in enormous memory usage.</p>
+        <p>Condition. A code which must evaluate to true.</p>
+        <p><strong>Note</strong>: presence of this expression turns on backtracking and output buffering and may result in enormous memory usage.</p>
       </td>
     </tr>
   </tbody>
 </table>
+
+TODO: Capture the generated output.
 
 Examples
 --------

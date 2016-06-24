@@ -205,7 +205,7 @@ module GenText
       def to_vm_code(context)
         [
           *generated_from(pos),
-          [:eval_ruby_code, context.rule_scope, self.to_s, pos.file, pos.line],
+          [:eval_ruby_code, context.rule_scope, self.to_s, pos.file, pos.line+1],
           [:gen]
         ]
       end
@@ -218,7 +218,7 @@ module GenText
         passed = Label.new
         [
           *generated_from(pos),
-          [:eval_ruby_code, context.rule_scope, self.to_s, pos.file, pos.line],
+          [:eval_ruby_code, context.rule_scope, self.to_s, pos.file, pos.line+1],
           [:goto_if, passed],
           [:rescue_, lambda { raise CheckFailed.new(pos) }],
           passed
@@ -232,7 +232,7 @@ module GenText
       def to_vm_code(context)
         [
           *generated_from(pos),
-          [:eval_ruby_code, context.rule_scope, self.to_s, pos.file, pos.line],
+          [:eval_ruby_code, context.rule_scope, self.to_s, pos.file, pos.line+1],
           [:pop]
         ]
       end
