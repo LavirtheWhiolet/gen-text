@@ -406,7 +406,7 @@ module GenText
       _{ c = code("{=") and _(GenCode[c]) } or
       _{ c = code("{?") and _(CheckCode[c]) } or
       _{ action_code } or
-      _{ n = nonterm and not_follows(:eq) and _(RuleCall[n]) } or
+      _{ n = nonterm and not_follows(:eq, :larrow) and _(RuleCall[n]) } or
       _{ gen_number } or
       _{ lparen and e = expr and rparen and e }
     end
