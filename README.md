@@ -24,15 +24,17 @@ Here `file.g` is a file containing the grammar description which consists of the
     
     nonterminal3 = expr3 ;
     
-Nonterminals start from a letter or "\_" and may contain alphanumeric characters, "\_", "-" or ":".
+Nonterminals start from a letter or "\_" and may contain alphanumeric characters, "\_", "-" and ":".
 
 You may also use backquoted nonterminals:
     
     `nonterminal1` = expr1 ;
     
     `Nonterminal with arbitrary characters: [:|:]\/!` = expr2 ;
-    
-You may use the following expressions in the right part:
+
+### Expressions ###
+
+You may use the following expressions in the rules' right part:
 
 <table>
   <thead>
@@ -157,6 +159,18 @@ You may use the following expressions in the right part:
 </table>
 
 TODO: Capture the generated output.
+
+### Alternate syntax ###
+
+You may use "<-" instead of "=":
+
+    nonterm1 <- expr1 ;
+    
+    nonterm2 <- expr2 ;
+
+and "/" instead of "|":
+
+    `simple choice` <- "a" / "b" ;
 
 Examples
 --------
