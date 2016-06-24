@@ -5,42 +5,68 @@ module GenText
   
   class Compile < Parse
     
-    # @method call(*args)
-    #   @param (see Parse#call)
-    #   @return [String] a code of a Ruby expression which evaluates to
-    #     a class extending {GenText}
-    #     (<code>"Class.new(GenText) do ... end"</code>).
+    # @param (see Parse#call)
+    # @return the program as an Array of <code>[:method_id, *args]</code> where
+    #   <code>method_id</code> is ID of {VM}'s method. The program may raise
+    #   {CheckFailed}.
+    def call(*args)
+      super(*args).to_vm_code
+    end
     
     private
+    
+    # ---- Utils ----
+    
+    INF = Float::INFINITY
+    
+    # @!visibility private
+    module ::ASTNode
+      
+      module_function
+      
+      # @return [Array<Array<(:generated_from, String)>>]
+      def generated_from(pos)
+        if $DEBUG then
+          [[:generated_from, "#{pos.file}:#{pos.line+1}:#{pos.column+1}"]]
+        else
+          []
+        end
+      end
+      
+    end
     
     # ---- AST & Code Generation ----
     
     # @!visibility private
     Context = Struct.new :rule_scope, :rule_labels
     
-    Program = ASTNode.new :rules, :top_expr do
+    # @!visibility private
+    class Label
+    end
+    
+    Program = ASTNode.new :rules do
       
       def to_vm_code
         rule_labels = {}; begin
           rules.each do |rule|
-            raise Parse::Error.new(rule.pos, "rule `#{rule.name} is defined twice") if rule_labels.has_key? rule.name
-            rule_labels[rule.name] = VM::Label.new
+            raise Parse::Error.new(rule.pos, "rule `#{rule.name}' is defined twice") if rule_labels.has_key? rule.name
+            rule_labels[rule.name] = Label.new
           end
         end
-        code = rules.map do |rule|
+        code =
           [
-            rule_labels[rule.name],
-            *rule.body.to_vm_code(Context.new(new_binding, rule_labels)),
-            lambda do |vm|
-              vm.pc = vm.stack.pop
-            end
+            [:call, rule_labels[rules.first.name]],
+            [:halt],
+            *rules.map do |rule|
+              [
+                *generated_from(rule.pos),
+                rule_labels[rule.name],
+                *rule.body.to_vm_code(Context.new(new_binding, rule_labels)),
+                [:ret]
+              ]
+            end.reduce(:concat)
           ]
-        end.reduce(:concat)
-      end
-      
-      def may_restore_output?
-        top_expr.may_restore_output? or
-        rules.map(&:body).any? { |b| b.may_restore_output? }
+        return replace_labels_with_addresses(code)
       end
       
       private
@@ -50,21 +76,42 @@ module GenText
         binding
       end
       
+      def replace_labels_with_addresses(code)
+        # Remove labels and remember their addresses.
+        addresses = {}
+        new_code = []
+        code.each do |instruction|
+          case instruction
+          when Label
+            addresses[instruction] = new_code.size
+          else
+            new_code.push instruction
+          end
+        end
+        # Replace labels in instructions' arguments.
+        this = lambda do |x|
+          case x
+          when Array
+            x.map(&this)
+          when Label
+            addresses[x]
+          else
+            x
+          end
+        end
+        return this.(new_code)
+      end
+      
     end
     
     GenString = ASTNode.new :string do
       
       def to_vm_code(context)
         [
-          lambda do |vm|
-            vm.out.write(string)
-            vm.pc += 1
-          end
+          *generated_from(pos),
+          [:push, string],
+          [:gen]
         ]
-      end
-      
-      def may_restore_output?
-        false
       end
       
     end
@@ -73,15 +120,10 @@ module GenText
       
       def to_vm_code(context)
         [
-          lambda do |vm|
-            vm.out.write(rand(from..to))
-            vm.pc += 1
-          end
+          *generated_from(pos),
+          [:push_rand, from..to],
+          [:gen]
         ]
-      end
-      
-      def may_restore_output?
-        false
       end
       
     end
@@ -92,86 +134,68 @@ module GenText
         raise Parse::Error.new(pos, "`from' can not be greater than `to'") if from_times > to_times
         # 
         subexpr_code = subexpr.to_vm_code(context)
+        # Code.
+        subexpr_label = Label.new
+        generated_from(pos) +
         # Mandatory part (0...from_times).
-        if from_times > 0 then
-          loop1 = VM::Label.new
-          loop1_end = VM::Label.new
+        if from_times > 0
+          loop1 = Label.new
+          loop1_end = Label.new
           [
-            lambda do |vm|
-              vm.stack.push counter = from_time
-              vm.pc += 1
-            end,
+            [:push, from_times], # counter
             loop1,
-            lambda do |vm|
-              if vm.stack.last == 0 then
-                vm.stack.pop # counter
-                vm.pc = loop1_end.address
-              else
-                vm.stack[-1] -= 1
-                vm.pc += 1
-              end
-            end,
-            *subexpr_code,
-            lambda { |vm| vm.pc = loop1.address },
-            loop1_end
+            [:goto_if_not_0, loop1_end], # if counter == 0 then goto loop1_end
+            [:call, subexpr_label],
+            [:dec], # counter
+            [:goto, loop1],
+            loop1_end,
+            [:pop] # counter
           ]
         else
           []
         end +
         # Optional part (from_times...to_times)
-        if (to_times - from_times) < INF
-          loop2 = VM::Label.new
-          loop2_end = VM::Label.new
+        if (to_times - from_times) == 0
+          []
+        elsif (to_times - from_times) < INF
+          loop2 = Label.new
+          loop2_end = Label.new
           [
-            lambda do |vm|
-              vm.stack.push counter = rand(to_times - from_times + 1)
-              vm.pc += 1
-            end,
+            [:push_rand, (to_times - from_times + 1)], # counter
             loop2,
-            lambda do |vm|
-              if vm.stack.last == 0 then
-                vm.pc = loop2_end.address
-              else
-                vm.push_rescue_point(loop2_end.address)
-                vm.pc += 1
-              end
-            end,
-            *subexpr_code,
-            lambda do |vm|
-              vm.pop # rescue point
-              vm.pc = loop2.address
-            end,
+            [:goto_if_not_0, loop2_end], # if counter == 0 then goto loop2_end
+            [:push_rescue_point, loop2_end],
+            [:call, subexpr_label],
+            [:pop], # rescue point
+            [:dec], # counter
+            [:goto, loop2],
             loop2_end,
-            lambda do |vm|
-              vm.stack.pop # counter
-              vm.pc += 1
-            end
+            [:pop], # counter
           ]
-        else
-          loop2 = VM::Label.new
-          loop2_end = VM::Label.new
+        else # if (to_times - from_times) is infinite
+          loop2 = Label.new
+          loop2_end = Label.new
           [
             loop2,
-            lambda do |vm|
-              if rand >= 0.5 then
-                vm.pc = loop2_end.address
-              else
-                vm.push_rescue_point(loop2_end.address)
-                vm.pc += 1
-              end
-            end,
-            *subexpr_code,
-            lambda do |vm|
-              vm.pop # rescue point
-              vm.pc = loop2.address
-            end,
+            [:goto_if_rand_gt, 0.5, loop2_end],
+            [:push_rescue_point],
+            [:call, subexpr_label],
+            [:pop], # rescue point
+            [:goto, loop2],
             loop2_end
           ]
+        end +
+        # Subexpr as subroutine.
+        begin
+          after_subexpr = Label.new
+          [
+            [:goto, after_subexpr],
+            subexpr_label,
+            *subexpr.to_vm_code(context),
+            [:ret],
+            after_subexpr
+          ]
         end
-      end
-      
-      def may_restore_output?
-        subexpr.may_restore_output?
       end
       
     end
@@ -179,18 +203,11 @@ module GenText
     GenCode = ASTNode.new :to_s do
       
       def to_vm_code(context)
-        rule_scope = context.rule_scope
         [
-          lambda do |vm|
-            data = rule_scope.eval(self.to_s, pos.file, pos.line+1)
-            vm.out.write(data)
-            vm.pc += 1
-          end
+          *generated_from(pos),
+          [:eval_ruby_code, context.rule_scope, self.to_s, pos.file, pos.line],
+          [:gen]
         ]
-      end
-      
-      def may_restore_output?
-        false
       end
       
     end
@@ -198,21 +215,14 @@ module GenText
     CheckCode = ASTNode.new :to_s do
       
       def to_vm_code(context)
-        rule_scope = context.rule_scope
+        passed = Label.new
         [
-          lambda do |vm|
-            check_passed = rule_scope.eval(self.to_s, pos.file, pos.line+1)
-            if check_passed then
-              vm.pc += 1
-            else
-              vm.rescue_ or raise Parse::Error.new(pos, "check failed")
-            end
-          end
+          *generated_from(pos),
+          [:eval_ruby_code, context.rule_scope, self.to_s, pos.file, pos.line],
+          [:goto_if, passed],
+          [:rescue_, lambda { raise CheckFailed.new(pos) }],
+          passed
         ]
-      end
-      
-      def may_restore_output?
-        true
       end
       
     end
@@ -220,17 +230,11 @@ module GenText
     ActionCode = ASTNode.new :to_s do
       
       def to_vm_code(context)
-        rule_scope = context.rule_scope
         [
-          lambda do |vm|
-            rule_scope.eval(self.to_s, pos.file, pos.line+1)
-            vm.pc += 1
-          end
+          *generated_from(pos),
+          [:eval_ruby_code, context.rule_scope, self.to_s, pos.file, pos.line],
+          [:pop]
         ]
-      end
-      
-      def may_restore_output?
-        false
       end
       
     end
@@ -238,17 +242,10 @@ module GenText
     RuleCall = ASTNode.new :name do
       
       def to_vm_code(context)
-        label = context.rule_labels[name] or raise Parse::Error.new(pos, "rule `#{name}' not defined")
         [
-          lambda do |vm|
-            vm.stack.push vm.pc
-            vm.pc = label.address
-          end
+          *generated_from(pos),
+          [:call, (context.rule_labels[name] or raise Parse::Error.new(pos, "rule `#{name}' not defined"))]
         ]
-      end
-      
-      def may_restore_output?
-        false  # Wrong but the rule referenced will be checked anyway.
       end
       
     end
@@ -267,69 +264,33 @@ module GenText
             (1.00 - known_probabilities_sum) / alternatives.map(&:probability).select { |x| x == :auto }.size
           alternatives.each do |alternative|
             alternative.weight =
-              if alternative.probability == :auto
-              then auto_probability
-              else alternative.probability
+              if alternative.probability == :auto then
+                auto_probability
+              else
+                alternative.probability
               end
           end
         end
         # Populate alternatives' labels.
-        alternatives.each { |a| a.label = VM::Label.new }
+        alternatives.each { |a| a.label = Label.new }
         # Generate the code.
         initial_weights_and_labels = alternatives.map { |a| [a.weight, a.label] }
-        end_label = VM::Label.new
+        end_label = Label.new
         [
-          lambda do |vm|
-            vm.push initial_weights_and_labels.dup
-            vm.pc += 1
-          end,
-          lambda do |vm|
-            weights_and_labels = vm.stack.last
-            vm.push_rescue_point
-            # If no alternatives left...
-            if weights_and_labels.size == 1 then
-              _, label = *weights_and_labels.first
-              vm.pc = label
-            # If there are alternatives...
-            else
-              chosen_weight_and_label = sample_weighed(weights_and_labels)
-              weights_and_labels.delete chosen_weight_and_label
-              _, chosen_label = *chosen_weight_and_label
-              vm.pc = chosen_label
-            end
-          end,
+          *generated_from(pos),
+          [:push_dup, initial_weights_and_labels],
+          [:weighed_choice],
           *alternatives.map do |alternative|
             [
               alternative.label,
               *alternative.subexpr.to_vm_code(context),
-              lambda { |vm| vm.pc = end_label }
+              [:goto, end_label],
             ]
           end.reduce(:concat),
           end_label,
-          lambda do |vm|
-            vm.stack.pop # rescue_point
-            vm.stack.pop # weights_and_labels
-          end
+          [:pop], # rescue_point
+          [:pop], # weights_and_labels
         ]
-      end
-      
-      def may_restore_output?
-        alternatives.map(&:subexpr).any?(&:may_restore_output?)
-      end
-      
-      private
-      
-      # @param [Array<Array<(Numeric, Object)>>] weights_and_items
-      # @return [Array<(Numeric, Object)>]
-      def sample_weighed(weights_and_items)
-        weight_sum = weights_and_item.map(&:first).reduce(:+)
-        chosen_partial_weight_sum = rand(0...weight_sum)
-        current_partial_weight_sum = 0
-        weights_and_items.find do |weight, item|
-          current_partial_weight_sum += weight
-          current_partial_weight_sum > chosen_partial_weight_sum
-        end or
-        weights_and_items.last
       end
       
     end
@@ -341,7 +302,7 @@ module GenText
       attr_accessor :weight
       
       # Used by {Choice#to_vm_code} only.
-      # @return [VM::Label]
+      # @return [Label]
       attr_accessor :label
       
     end
@@ -349,11 +310,8 @@ module GenText
     Seq = ASTNode.new :subexprs do
       
       def to_vm_code(context)
-        subexprs.map { |subexpr| subexpr.to_vm_code(context) }.reduce(:concat)
-      end
-      
-      def may_restore_output?
-        subexprs.any?(&:may_restore_output?)
+        generated_from(pos) +
+          subexprs.map { |subexpr| subexpr.to_vm_code(context) }.reduce(:concat)
       end
       
     end
@@ -364,14 +322,8 @@ module GenText
     
     rule :start do
       whitespace_and_comments and
-      rules_and_action_codes = many {
-        _{ rule_definition } or
-        _{ expr }
-      } and
-      _(Program[
-        rules_and_action_codes.select { |x| x.is_a? RuleDefinition },
-        _(Seq[rules_and_action_codes.select { |x| not x.is_a? RuleDefinition }])
-      ]).to_vm_code
+      rules = many { rule_definition } and
+      _(Program[rules])
     end
     
     rule :expr do
@@ -380,15 +332,16 @@ module GenText
     
     rule :choice do
       first = true
-      _{
-        as = two_or_more {
-          p = choice_alternative_start(first) and s = seq and
-          act { first = false } and
-          _(ChoiceAlternative[p, s])
-        } and
+      as = one_or_more {
+        p = choice_alternative_start(first) and s = seq and
+        act { first = false } and
+        _(ChoiceAlternative[p, s])
+      } and
+      if as.size == 1 then
+        as.first.subexpr
+      else
         _(Choice[as])
-      } or
-      _{ seq }
+      end
     end
     
     # Returns probability or :auto.
@@ -408,13 +361,9 @@ module GenText
       (if first then :auto else nil end)
     end
     
-    def two_or_more(&f)
-      x1 = f.() and x2 = f.() and xn = many(&f) and [x1, x2, *xn]
-    end
-    
     rule :seq do
       e = repeat and many {
-        e2 = repeat and e = Seq[to_seq_subexprs(e) + to_seq_subexprs(e2)]
+        e2 = repeat and e = _(Seq[to_seq_subexprs(e) + to_seq_subexprs(e2)])
       } and
       e
     end
@@ -473,7 +422,7 @@ module GenText
     end
     
     rule :rule_definition do
-      n = nonterm and eq and e = choice and semicolon and
+      n = nonterm and (_{eq} or _{larrow}) and e = choice and semicolon and
       _(RuleDefinition[n, e])
     end
     
@@ -496,6 +445,7 @@ module GenText
     token :lbracket, "["
     token :rbracket, "]"
     token :dot, "."
+    token :larrow, "<-"
     
     # Parses "#{start} #{code_part} } #{whitespace_and_comments}".
     # Returns the code_part.
@@ -552,9 +502,10 @@ module GenText
     
     token :number do
       s = scan(/[\-\+]?\d+(\.\d+)?([eE][\-\+]?\d+)?/) and
-      if /[\.eE]/ === s
-      then Float(s)
-      else Integer(s)
+      if /[\.eE]/ === s then
+        Float(s)
+      else
+        Integer(s)
       end
     end
     
@@ -569,7 +520,7 @@ module GenText
     def whitespace_and_comments
       many {
         _{ scan(/\s+/) } or
-        _{ (scan("//") or scan("--")) and scan(/[^\n]*\n/m) } or
+        _{ scan("//") and scan(/[^\n]*\n/m) } or
         _{
           p = pos and scan("/*") and
           many { not_follows { scan("*/") } and scan(/./m) } and
@@ -578,33 +529,18 @@ module GenText
       }
     end
     
-    # ---- Utilities ----
+  end
+  
+  class CheckFailed < Exception
     
-    # @!visibility private
-    class ::Object
-      
-      # @return [String] a {String} x which eval(x) == self.
-      def to_rb
-        inspect
-      end
-      
+    # @param [Parse::Position] pos
+    def initialize(pos)
+      super("check failed")
+      @pos = pos
     end
     
-    # @!visibility private
-    class ::Float
-      
-      # (see Object#to_rb)
-      def to_rb
-        case self
-        when INF then "Float::INFINITY"
-        when -INF then "(-Float::INFINITY)"
-        else to_s
-        end
-      end
-      
-    end
-    
-    INF = Float::INFINITY
+    # @return [Parse::Position] pos
+    attr_reader :pos
     
   end
   
