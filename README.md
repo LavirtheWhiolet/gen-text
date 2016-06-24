@@ -196,5 +196,5 @@ See them in "sample" directory.
 Links
 -----
 
-- [Documentation](http://www.rubydoc.info/gems/gen-text/0.0.2)
+- [Documentation](http://www.rubydoc.info/gems/gen-text/0.0.3)
 - [Source code](https://github.com/LavirtheWhiolet/gen-text)
