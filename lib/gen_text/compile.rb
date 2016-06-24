@@ -422,7 +422,7 @@ module GenText
     end
     
     rule :rule_definition do
-      n = nonterm and (_{eq} or _{larrow}) and e = choice and semicolon and
+      n = nonterm and (_{eq} or _{larrow}) and e = choice and opt {semicolon} and
       _(RuleDefinition[n, e])
     end
     

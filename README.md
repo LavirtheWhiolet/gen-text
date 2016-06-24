@@ -32,6 +32,14 @@ You may also use backquoted nonterminals:
     
     `Nonterminal with arbitrary characters: [:|:]\/!` = expr2 ;
 
+Trailing ";" can be omitted:
+
+    nonterminal1 = expr1
+    
+    nonterminal2 = expr2
+    
+    nonterminal3 = expr3
+
 ### Expressions ###
 
 You may use the following expressions in the rules' right part:
