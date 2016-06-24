@@ -1,0 +1,2 @@
+--files sample/*
+--load yardopts_extra.rb

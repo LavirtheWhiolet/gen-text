@@ -13,4 +13,8 @@ class IO
     
   end
   
+  # To disable YARD warnings:
+  #@!method pos
+  #@!method pos=(p)
+  
 end
