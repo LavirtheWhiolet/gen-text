@@ -40,6 +40,14 @@ Trailing ";" can be omitted:
     
     nonterminal3 = expr3
 
+Also you may omit the left part in the first rule:
+
+    expr1
+    
+    nonterminal2 = expr2
+    
+    nonterminal3 = expr3
+
 ### Expressions ###
 
 You may use the following expressions in the rules' right part:

@@ -44,7 +44,7 @@ module GenText
     class Label
     end
     
-    Program = ASTNode.new :rules do
+    Grammar = ASTNode.new :first_expr, :rules do
       
       def to_vm_code
         rule_labels = {}; begin
@@ -55,7 +55,13 @@ module GenText
         end
         code =
           [
-            [:call, rule_labels[rules.first.name]],
+            *(
+              if first_expr then
+                first_expr.to_vm_code(Context.new(new_binding, rule_labels))
+              else
+                [[:call, rule_labels[rules.first.name]]]
+              end
+            ),
             [:halt],
             *rules.map do |rule|
               [
@@ -321,9 +327,13 @@ module GenText
     # ---- Syntax ----
     
     rule :start do
-      whitespace_and_comments and
+      whitespace_and_comments and grammar
+    end
+    
+    rule :grammar do
+      first_expr = opt { e = expr and opt {semicolon} and e } and
       rules = many { rule_definition } and
-      _(Program[rules])
+      _(Grammar[first_expr.first, rules])
     end
     
     rule :expr do
