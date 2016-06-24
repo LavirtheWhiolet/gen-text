@@ -36,8 +36,6 @@
 </head>
 <body>
 
-<h1><tt>gen-text</tt></h1>
-
 <h2>Description</h2>
 
 <p>A generator of texts from EBNF-like grammars.</p>
@@ -65,7 +63,7 @@ nonterminal2 = expr2 ;
 nonterminal3 = expr3 ;
 </code></pre>
 
-<p>Nonterminals start from a letter or "_" and may contain alphanumeric characters, "_", "-" or ":".</p>
+<p>Nonterminals start from a letter or "_" and may contain alphanumeric characters, "_", "-" and ":".</p>
 
 <p>You may also use backquoted nonterminals:</p>
 
@@ -74,7 +72,27 @@ nonterminal3 = expr3 ;
 `Nonterminal with arbitrary characters: [:|:]\/!` = expr2 ;
 </code></pre>
 
-<p>You may use the following expressions in the right part:</p>
+<p>Trailing ";" can be omitted:</p>
+
+<pre><code>nonterminal1 = expr1
+
+nonterminal2 = expr2
+
+nonterminal3 = expr3
+</code></pre>
+
+<p>Also you may omit the left part in the first rule:</p>
+
+<pre><code>expr1
+
+nonterminal2 = expr2
+
+nonterminal3 = expr3
+</code></pre>
+
+<h3>Expressions</h3>
+
+<p>You may use the following expressions in the rules' right part:</p>
 
 <table>
   <thead>
@@ -122,20 +140,20 @@ nonterminal3 = expr3 ;
     </tr>
     <tr>
       <td>
-        <code>
+        <tt>
           | expr <br/>
           | expr
-        </code>
+        </tt>
       </td>
       <td>Random choice (another form).</td>
     </tr>
     <tr>
       <td>
-        <code>
+        <tt>
           | [m%] expr <br/>
           | [n%] expr <br/>
           | expr
-        </code>
+        </tt>
       </td>
       <td>
         <p>Random choice with specific probabilities.</p>
@@ -144,11 +162,11 @@ nonterminal3 = expr3 ;
     </tr>
     <tr>
       <td>
-        <code>
+        <tt>
           | [0.1] expr <br/>
           | [0.3] expr <br/>
           | expr
-        </code>
+        </tt>
       </td>
       <td>
         The same as above. Probabilities may be specified as floating point numbers between 0.0 and 1.0.
@@ -200,6 +218,20 @@ nonterminal3 = expr3 ;
 
 <p>TODO: Capture the generated output.</p>
 
+<h3>Alternate syntax</h3>
+
+<p>You may use "&lt;-" instead of "=":</p>
+
+<pre><code>nonterm1 &lt;- expr1 ;
+
+nonterm2 &lt;- expr2 ;
+</code></pre>
+
+<p>and "/" instead of "|":</p>
+
+<pre><code>`simple choice` &lt;- "a" / "b" ;
+</code></pre>
+
 <h2>Examples</h2>
 
 <p>See them in "sample" directory.</p>
@@ -207,7 +239,7 @@ nonterminal3 = expr3 ;
 <h2>Links</h2>
 
 <ul>
-<li><a href="http://www.rubydoc.info/gems/gen-text/0.0.2">Documentation</a></li>
+<li><a href="http://www.rubydoc.info/gems/gen-text/0.0.3">Documentation</a></li>
 <li><a href="https://github.com/LavirtheWhiolet/gen-text">Source code</a></li>
 </ul>
 
