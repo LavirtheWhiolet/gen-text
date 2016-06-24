@@ -1,7 +1,7 @@
 Description
 -----------
 
-A generator of random texts based on EBNF-like grammars.
+A generator of random texts from EBNF-like grammars.
 
 Install
 -------
