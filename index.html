@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ru" dir="ltr">
+<head>
+<meta charset="UTF-8"/>
+<title>gen-text</title>
+<style>
+  body{
+    margin: 40px auto;
+    max-width: 850px;
+    line-height: 1.6;
+    font-size: 18px;
+    color: #444;
+    padding: 0 10px;
+  }
+  h1, h2, h3 {
+    line-height:1.2;
+  }
+  pre {
+    padding: 16px;
+    background-color: #f7f7f7;
+    line-height: 1.45;
+    font-size: 85%;
+    overflow: auto;
+  }
+  tt, code {
+/*     background-color: #f7f7f7; */
+  }
+  table {
+    border-collapse: collapse;
+  }
+  table td {
+    border: solid 1px;
+    padding: 0.5em;
+  }
+</style>
+</head>
+<body>
+
+<h1><tt>gen-text</tt></h1>
+
+<h2>Description</h2>
+
+<p>A generator of texts from EBNF-like grammars.</p>
+
+<h2>Install</h2>
+
+<ul>
+<li>Install <a href="http://ruby-lang.org">Ruby</a> 1.9.3 or higher.</li>
+<li><code>gem install gen-text</code></li>
+</ul>
+
+<h2>Usage</h2>
+
+<p>Run it with the command:</p>
+
+<pre><code>gen-text file.g
+</code></pre>
+
+<p>Here <code>file.g</code> is a file containing the grammar description which consists of the rule definitions:</p>
+
+<pre><code>nonterminal1 = expr1 ;
+
+nonterminal2 = expr2 ;
+
+nonterminal3 = expr3 ;
+</code></pre>
+
+<p>Nonterminals start from a letter or "_" and may contain alphanumeric characters, "_", "-" or ":".</p>
+
+<p>You may also use backquoted nonterminals:</p>
+
+<pre><code>`nonterminal1` = expr1 ;
+
+`Nonterminal with arbitrary characters: [:|:]\/!` = expr2 ;
+</code></pre>
+
+<p>You may use the following expressions in the right part:</p>
+
+<table>
+  <thead>
+    <tr> <td><strong>Expression</strong></td> <td><strong>Meaning</strong></td> </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <tt>"str"</tt><br/>
+        <tt>'str'</tt>
+      </td>
+      <td>
+        <p>Generate a string.</p>
+        <p>Following escape sequences are allowed: "\n", "\t", "\e" and "\." where "." is an arbitrary character.</p>
+      </td>
+    </tr>
+    <tr>
+      <td><tt>U+HHHH</tt></td>
+      <td>Generate an UTF-8 character sequence corresponding to the Unicode code. E. g.: <tt>U+000A</tt> is equivalent to <tt>"\n"</tt>.</td>
+    </tr>
+    <tr>
+      <td><tt>n</tt> (a number)</td>
+      <td>Generate a number</td>
+    </tr>
+    <tr>
+      <td><tt>m...n</tt></td>
+      <td>Generate a random number between <tt>m</tt> and <tt>n</tt> (inclusive).</td>
+    </tr>
+    <tr>
+      <td><tt>nonterm</tt></td>
+      <td>—</td>
+    </tr>
+    <tr>
+      <td colspan="2"><center><strong>Combinators</strong></center></td>
+    </tr>
+    <tr>
+      <td> <tt>expr expr</tt> </td>
+      <td>Sequence.</td>
+    </tr>
+    <tr>
+      <td>
+        <tt>expr | expr</tt>
+      </td>
+      <td>Random choice.</td>
+    </tr>
+    <tr>
+      <td>
+        <code>
+          | expr <br/>
+          | expr
+        </code>
+      </td>
+      <td>Random choice (another form).</td>
+    </tr>
+    <tr>
+      <td>
+        <code>
+          | [m%] expr <br/>
+          | [n%] expr <br/>
+          | expr
+        </code>
+      </td>
+      <td>
+        <p>Random choice with specific probabilities.</p>
+        <p>If probability is unspecified then it is calculated automatically.</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>
+          | [0.1] expr <br/>
+          | [0.3] expr <br/>
+          | expr
+        </code>
+      </td>
+      <td>
+        The same as above. Probabilities may be specified as floating point numbers between 0.0 and 1.0.
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <tt>expr*</tt> <br/>
+        <tt>expr+</tt> <br/>
+        <tt>expr?</tt> <br/>
+        <tt>expr*[n]</tt> <br/>
+        <tt>expr*[m...n]</tt> <br/>
+      </td>
+      <td>
+        <p>Repeat <tt>expr</tt> many times:</p>
+        <ul>
+          <li>0 or more times</li>
+          <li>1 or more times</li>
+          <li>0 or 1 time</li>
+          <li>exactly <tt>n</tt> times</li>
+          <li>between <tt>m</tt> and <tt>n</tt> times</li>
+        </ul>
+        <p><strong>Note:</strong> you may use <tt>inf</tt> ("infinity") instead of <tt>m</tt> or <tt>n</tt>.</p>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2"><center><strong>Ruby code insertions</strong></center></td>
+    </tr>
+    <tr>
+      <td><tt>{ code }</tt></td>
+      <td>
+        <p>Execute the code. Generate nothing.</p>
+        <p><strong>Note</strong>: all code insertions inside a rule share the same scope.</p>
+      </td>
+    </tr>
+    <tr>
+      <td><tt>{= code }</tt></td>
+      <td>Generate a string returned by the code.</td>
+    </tr>
+    <tr>
+      <td><tt>{? code }</tt></td>
+      <td>
+        <p>Condition. A code which must evaluate to true.</p>
+        <p><strong>Note</strong>: presence of this expression turns on backtracking and output buffering and may result in enormous memory usage.</p>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<p>TODO: Capture the generated output.</p>
+
+<h2>Examples</h2>
+
+<p>See them in "sample" directory.</p>
+
+<h2>Links</h2>
+
+<ul>
+<li><a href="http://www.rubydoc.info/gems/gen-text/0.0.2">Documentation</a></li>
+<li><a href="https://github.com/LavirtheWhiolet/gen-text">Source code</a></li>
+</ul>
+
+</body>
+</html>
