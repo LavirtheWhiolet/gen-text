@@ -1,7 +1,7 @@
 
 Gem::Specification.new do |s|
   s.name        = 'gen-text'
-  s.version     = '0.0.2'
+  s.version     = '0.0.3'
   s.licenses    = ['MIT']
   s.summary     = "A generator of texts from EBNF-like grammars."
   s.description = <<-TEXT
