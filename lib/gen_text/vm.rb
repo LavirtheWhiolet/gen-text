@@ -1,36 +1,41 @@
-require 'restorable_output'
 
 module GenText
   
   class VM
     
-    # @param [RestorableOutput] out
-    def initialize(out)
-      @stack = []
-      @out = out
-      @pc = 0
-      @halted = false
-    end
-    
-    # @param (see #run)
+    # @param program Array of <code>[:method_id, *args]</code>.
     # @return [Boolean] true if +program+ may result in calling
-    #   {RestorableOutput#state=}.
-    def self.may_set_output_state?(program)
+    #   {IO#pos=} and false otherwise.
+    def self.may_set_out_pos?(program)
       program.any? { |instruction| instruction.first == :rescue_ }
     end
     
-    # @param program is Array of <code>[:method_id, *args]</code>.
+    # Executes +program+.
+    # 
+    # After the execution the +out+ may contain garbage after its {IO#pos}.
+    # It is up to the caller to truncate the garbage or to copy the useful data.
+    # 
+    # @param program Array of <code>[:method_id, *args]</code>.
+    # @param [IO] out
     # @param [Boolean] do_not_run if true then +program+ will not be run
     #   (some checks and initializations will be performed only).
     # @return [void]
-    def run(program, do_not_run = false)
+    def run(program, out, do_not_run = false)
+      # 
       if $DEBUG
         STDERR.puts "PROGRAM:"
         program.each_with_index do |instruction, addr|
           STDERR.puts "  #{addr}: #{inspect_instruction(instruction)}"
         end
       end
+      #
       return if do_not_run
+      # Init.
+      @stack = []
+      @out = out
+      @pc = 0
+      @halted = false
+      # Run.
       STDERR.puts "RUN TRACE:" if $DEBUG
       until halted?
         instruction = program[@pc]
@@ -47,7 +52,7 @@ module GenText
     # @return [Integer]
     attr_reader :pc
     
-    # @return [RestorableOutput]
+    # @return [IO]
     attr_reader :out
     
     # @return [Boolean]
@@ -172,12 +177,12 @@ module GenText
       @pc += 1
     end
     
-    # {#push}(state of {#out} and {#pc} as {RescuePoint})
+    # {#push}({#out}'s {IO#pos} and {#pc} as {RescuePoint})
     # 
     # @param [Integer, nil] pc if specified then it is pushed instead of {#pc}.
     # @return [void]
     def push_rescue_point(pc = nil)
-      @stack.push RescuePoint[(pc or @pc), @out.state]
+      @stack.push RescuePoint[(pc or @pc), @out.pos]
       @pc += 1
     end
     
@@ -192,8 +197,8 @@ module GenText
         on_failure.()
       else
         rescue_point = @stack.pop
-        @pc = rescue_point.return_pc
-        @out.state = rescue_point.out_state
+        @pc = rescue_point.pc
+        @out.pos = rescue_point.out_pos
       end
     end
     
@@ -237,7 +242,7 @@ module GenText
       end
     end
     
-    RescuePoint = Struct.new :return_pc, :out_state
+    RescuePoint = Struct.new :pc, :out_pos
     
     private
     

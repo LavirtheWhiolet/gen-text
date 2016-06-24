@@ -1,7 +1,7 @@
 /* Simple arithmetic expressions */
 
 prog =
-  expr '\n'
+  expr '\n' {? true }
   ;
 
 expr =

@@ -1,8 +1,8 @@
 #!/usr/bin/ruby
 require 'gen_text/vm'
 require 'gen_text/compile'
-require 'restorable_output/memory_buffered'
-require 'restorable_output/non_restorable'
+require 'io/with_dummy_pos'
+require 'stringio'
 
 def usage
   puts <<-TEXT
@@ -51,17 +51,21 @@ program =
   rescue Parse::Error => e
     abort "error: #{e.pos.file}:#{e.pos.line+1}:#{e.pos.column+1}: #{e.message}"
   end
-output =
-  if GenText::VM.may_set_output_state?(program) then
-    RestorableOutput::MemoryBuffered.new(STDOUT)
+buffered, out =
+  if GenText::VM.may_set_out_pos?(program) then
+    [false, IO::WithDummyPos.new(STDOUT)]
   else
-    RestorableOutput::NonRestorable.new(STDOUT)
+    [true, StringIO.new]
   end
 begin
   srand(Time.now.to_i)
-  GenText::VM.new(output).run(program, compile_only)
+  GenText::VM.new.run(program, out, compile_only)
 rescue GenText::CheckFailed => e
   abort "error: #{e.pos.file}:#{e.pos.line+1}:#{e.pos.column+1}: #{e.message}"
 ensure
-  output.close
+  if buffered then
+    n = out.pos
+    out.pos = 0
+    IO.copy_stream(out, STDOUT, n)
+  end
 end
