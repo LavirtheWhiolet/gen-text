@@ -1,16 +1,9 @@
 
 module RestorableOutput
   
-  # @!method remember(&block)
+  # @!method state
   #   @abstract
-  #   
-  #   Remembers the current state of self. Inside +block+ {#restore} restores
-  #   self to the remembered state.
-  #   
-  #   {#remember} allows nested calls. Inside the most inner +block+ {#restore}
-  #   restores self to the state remembered by the most inner {#remember}.
-  #   
-  #   @return what +block+ returns.
+  #   @return [Object]
   
   # @!method write(str)
   #   @abstract
@@ -30,8 +23,9 @@ module RestorableOutput
   #   @abstract
   #   @return [void]
   
-  # @!method restore
+  # @!method state=(s)
   #   @abstract
+  #   @param [Object] s the state returned by {#state}.
   #   @return [void]
   
 end

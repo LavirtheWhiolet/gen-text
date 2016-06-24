@@ -1,8 +1,15 @@
 require 'restorable_output'
 
+# To disable YARD warnings:
+# @!parse
+#   class IO
+#   end
+
+#
 module RestorableOutput
   
-  # {RestorableOutput} which has non-working {#restore} method.
+  # {RestorableOutput} which has non-working {#state=} method.
+  # It writes all data directly to {IO} passed to it.
   class NonRestorable
     
     include RestorableOutput
@@ -12,22 +19,26 @@ module RestorableOutput
       @io = io
     end
     
-    # (see RestorableOutput#write)
+    # @param (see RestorableOutput#write)
+    # @return (see RestorableOutput#write)
     def write(str)
       @io.write(str)
     end
     
-    # (see RestorableOutput#remember)
-    def remember(&block)
-      block.()
+    # @param (see RestorableOutput#state)
+    # @return (see RestorableOutput#state)
+    def state
+      nil
     end
     
-    # (see RestorableOutput#restore)
-    def restore
+    # @param (see RestorableOutput#state=)
+    # @return (see RestorableOutput#state=)
+    def state=(s)
       raise "this is non-restorable output"
     end
     
-    # (see RestorableOutput#close)
+    # @param (see RestorableOutput#close)
+    # @return (see RestorableOutput#close)
     def close
       @io.close
     end

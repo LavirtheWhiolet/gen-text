@@ -12,31 +12,28 @@ module RestorableOutput
     def initialize(io)
       @io = io
       @buffer = StringIO.new
-      @remembered_pos = nil
     end
     
-    # (see RestorableOutput#write)
+    # @param (see RestorableOutput#write)
+    # @return (see RestorableOutput#write)
     def write(str)
       @buffer.write(str)
     end
     
-    # (see RestorableOutput#remember)
-    def remember(&block)
-      old_remembered_pos = @remembered_pos
-      @remembered_pos = @buffer.pos
-      begin
-        return block.()
-      ensure
-        @remembered_pos = old_remembered_pos
-      end
+    # @param (see RestorableOutput#state)
+    # @return (see RestorableOutput#state)
+    def state
+      @buffer.pos
     end
     
-    # (see RestorableOutput#restore)
-    def restore
-      @buffer.pos = @remembered_pos
+    # @param (see RestorableOutput#state=)
+    # @return (see RestorableOutput#state=)
+    def state=(s)
+      @buffer.pos = s
     end
     
-    # (see RestorableOutput#close)
+    # @param (see RestorableOutput#close)
+    # @return (see RestorableOutput#close)
     def close
       n = @buffer.pos
       @buffer.pos = 0

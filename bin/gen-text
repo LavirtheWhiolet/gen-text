@@ -1,12 +1,12 @@
 #!/usr/bin/ruby
-require 'gen_text'
+require 'gen_text/vm'
 require 'gen_text/compile'
 require 'restorable_output/memory_buffered'
 require 'restorable_output/non_restorable'
 
 def usage
   puts <<-TEXT
-Usage: #{File.basename __FILE__} [-h|--help] [grammar]
+Usage: #{File.basename __FILE__} [options] [grammar]
 
 Reads grammar and generates random text from it.
 
@@ -14,46 +14,54 @@ If the grammar file is not specified the the grammar is read from standard
 input.
 
 Options:
-     -h, --help             Show this message and exit
+     -h, --help             Show this message and exit.
+     -d, --debug            Turn on debug mode.
+     -c, --compile          Compile the grammar. Do not generate text.
 
 TEXT
 end
 
-$grammar = :stdin
+grammar_file = :'-'
+compile_only = false
 until ARGV.empty?
   case x = ARGV.shift
   when "-h", "--help"
     usage
     exit
+  when "-d", "--debug"
+    $DEBUG = true
+  when "-c", "--compile"
+    compile_only = true
   else
-    $grammar = x
+    grammar_file = x
   end
 end
-$grammar =
+grammar =
   begin
-    case $grammar
-    when :stdin then STDIN.read
-    else File.read($grammar)
+    case grammar_file
+    when :'-' then STDIN.read
+    else File.read(grammar_file)
     end
   rescue IOError => e
     abort e.message
   end
-class_code =
+program =
   begin
-    GenText::Compile.new.($grammar)
+    GenText::Compile.new.(grammar, grammar_file.to_s)
   rescue Parse::Error => e
     abort "error: #{e.pos.file}:#{e.pos.line+1}:#{e.pos.column+1}: #{e.message}"
   end
-gen_text = eval(class_code).new
 output =
-  if gen_text.may_restore_output?
-  then RestorableOutput::MemoryBuffered.new(STDOUT)
-  else RestorableOutput::NonRestorable.new(STDOUT)
+  if GenText::VM.may_set_output_state?(program) then
+    RestorableOutput::MemoryBuffered.new(STDOUT)
+  else
+    RestorableOutput::NonRestorable.new(STDOUT)
   end
-generated_ok =
-  begin
-    gen_text.(output)
-  ensure
-    output.close
-  end
-abort "This grammar produces no texts." if not generated_ok
+begin
+  srand(Time.now.to_i)
+  GenText::VM.new(output).run(program, compile_only)
+rescue GenText::CheckFailed => e
+  abort "error: #{e.pos.file}:#{e.pos.line+1}:#{e.pos.column+1}: #{e.message}"
+ensure
+  output.close
+end
