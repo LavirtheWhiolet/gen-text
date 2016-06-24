@@ -1,11 +1,11 @@
 
 Gem::Specification.new do |s|
   s.name        = 'gen-text'
-  s.version     = '0.0.3'
+  s.version     = '0.0.4'
   s.licenses    = ['MIT']
-  s.summary     = "A generator of texts from EBNF-like grammars."
+  s.summary     = "Random texts generator based on EBNF-like grammars."
   s.description = <<-TEXT
-A generator of texts from EBNF-like grammars. It features probability management, code insertions and conditional generation with conditions written in Ruby.
+A generator of random texts from EBNF-like grammars. It features probability management, code insertions and conditional generation with conditions written in Ruby.
   TEXT
   s.author      = "Lavir the Whiolet"
   s.email       = 'Lavir.th.Whiolet@gmail.com'

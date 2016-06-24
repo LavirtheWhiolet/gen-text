@@ -1,7 +1,7 @@
 Description
 -----------
 
-A generator of texts from EBNF-like grammars.
+A generator of random texts based on EBNF-like grammars.
 
 Install
 -------
@@ -196,5 +196,5 @@ See them in "sample" directory.
 Links
 -----
 
-- [Documentation](http://www.rubydoc.info/gems/gen-text/0.0.3)
+- [Documentation](http://www.rubydoc.info/gems/gen-text/0.0.4)
 - [Source code](https://github.com/LavirtheWhiolet/gen-text)
