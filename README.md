@@ -48,6 +48,12 @@ Also you may omit the left part in the first rule:
     
     nonterminal3 = expr3
 
+You may use C++-like comments:
+
+    // A comment
+    
+    /* Another comment */
+
 ### Expressions ###
 
 You may use the following expressions in the rules' right part:
@@ -196,5 +202,5 @@ See them in "sample" directory.
 Links
 -----
 
-- [Documentation](http://www.rubydoc.info/gems/gen-text/0.0.4)
+- [Documentation](http://www.rubydoc.info/gems/gen-text/0.0.5)
 - [Source code](https://github.com/LavirtheWhiolet/gen-text)
