@@ -491,7 +491,7 @@ module GenText
         _{ scan(/\\n/) and "\n" } or
         _{ scan(/\\t/) and "\t" } or
         _{ scan(/\\e/) and "\e" } or
-        _{ scan(/\\./) } or
+        _{ scan("\\") and scan(/./) } or
         scan(/[^#{quote}]/)
       }.join and
       (scan(quote) or raise Expected.new(p, "`#{quote}' at the end")) and s
