@@ -157,6 +157,15 @@ You may use the following expressions in the rules' right part:
       </td>
     </tr>
     <tr>
+      <td>
+        <tt>n:expr</tt>
+      </td>
+      <td>
+        <p></p>
+        <p><strong>Note:</strong> you may use <tt>inf</tt> ("infinity") instead of <tt>m</tt> or <tt>n</tt>.</p>
+      </td>
+    </tr>
+    <tr>
       <td colspan="2"><center><strong>Ruby code insertions</strong></center></td>
     </tr>
     <tr>
