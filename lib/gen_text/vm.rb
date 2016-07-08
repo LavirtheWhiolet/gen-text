@@ -12,7 +12,8 @@ module GenText
     
     # Executes +program+.
     # 
-    # After the execution the +out+ may contain garbage after its {IO#pos}.
+    # If +program+ may result in calling {IO#pos=} (see {VM::may_set_out_pos?}
+    # then after the execution the +out+ may contain garbage after its {IO#pos}.
     # It is up to the caller to truncate the garbage or to copy the useful data.
     # 
     # @param program Array of <code>[:method_id, *args]</code>.
