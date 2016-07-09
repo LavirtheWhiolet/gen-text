@@ -256,6 +256,19 @@ module GenText
       
     end
     
+    Capture = ASTNode.new :var_name, :expr, :discard_output do
+      
+      def to_vm_code(context)
+        [
+          *generated_from(pos),
+          [:push_pos],
+          *expr.to_vm_code(context),
+          [:capture, context.rule_scope, var_name, discard_output]
+        ]
+      end
+      
+    end
+    
     Choice = ASTNode.new :alternatives do
       
       def to_vm_code(context)
@@ -372,8 +385,8 @@ module GenText
     end
     
     rule :seq do
-      e = repeat and many {
-        e2 = repeat and e = _(Seq[to_seq_subexprs(e) + to_seq_subexprs(e2)])
+      e = capture and many {
+        e2 = capture and e = _(Seq[to_seq_subexprs(e) + to_seq_subexprs(e2)])
       } and
       e
     end
@@ -383,6 +396,18 @@ module GenText
       when Seq then e.subexprs
       else [e]
       end
+    end
+    
+    rule :capture do
+      _{
+        n = ruby_var_name and
+        d = (
+          _{ colon_eq and :discard_output } or
+          _{ colon and :do_not_discard_output }
+        ) and
+        e = repeat and _(Capture[n, e, (d == :discard_output)])
+      } or
+      _{ repeat }
     end
     
     rule :repeat do
@@ -456,6 +481,8 @@ module GenText
     token :rbracket, "]"
     token :dot, "."
     token :larrow, "<-"
+    token :colon, ":"
+    token :colon_eq, ":="
     
     # Parses "#{start} #{code_part} } #{whitespace_and_comments}".
     # Returns the code_part.
@@ -477,6 +504,10 @@ module GenText
           p1 + p2 + p3
         }
       }.join
+    end
+    
+    token :ruby_var_name, "variable name" do
+      scan(/[\@\$]?[a-z_][a-z_0-9]*/)
     end
     
     token :string do

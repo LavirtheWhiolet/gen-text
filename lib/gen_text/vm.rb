@@ -7,7 +7,9 @@ module GenText
     # @return [Boolean] true if +program+ may result in calling
     #   {IO#pos=} and false otherwise.
     def self.may_set_out_pos?(program)
-      program.any? { |instruction| instruction.first == :rescue_ }
+      program.any? do |instruction|
+        [:rescue_, :capture].include? instruction.first
+      end
     end
     
     # Executes +program+.
@@ -166,6 +168,32 @@ module GenText
       @pc += 1
     end
     
+    # - p := {#pop};
+    # - +binding_+.eval(set variable named +name+ to a substring of {#out} from
+    #   p to current position);
+    # - if +discard_output+ is true then set {IO#pos} of {#out} to p.
+    # 
+    # @param [Binding] binding_
+    # @param [String] name
+    # @param [Boolean] discard_output
+    # @return [void]
+    def capture(binding_, name, discard_output)
+      capture_start_pos = @stack.pop
+      capture_end_pos = @out.pos
+      captured_string = begin
+        @out.pos = capture_start_pos
+        @out.read(capture_end_pos - capture_start_pos)
+      end
+      @out.pos =
+        if discard_output then
+          capture_start_pos
+        else
+          capture_end_pos
+        end
+      binding_.eval("#{name} = #{captured_string.inspect}")
+      @pc += 1
+    end
+    
     # {#push}(eval(+ruby_code+, +file+, +line+))
     # 
     # @param [Binding] binding_
@@ -178,7 +206,15 @@ module GenText
       @pc += 1
     end
     
-    # {#push}({#out}'s {IO#pos} and {#pc} as {RescuePoint})
+    # {#push}({#out}'s {IO#pos})
+    # 
+    # @return [void]
+    def push_pos
+      @stack.push(@out.pos)
+      @pc += 1
+    end
+    
+    # {#push}({#out}'s {IO#pos}, {#pc} as {RescuePoint})
     # 
     # @param [Integer, nil] pc if specified then it is pushed instead of {#pc}.
     # @return [void]
