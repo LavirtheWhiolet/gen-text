@@ -231,5 +231,5 @@ and "/" instead of "|":
 Links
 -----
 
-- [Documentation](http://www.rubydoc.info/gems/gen-text/0.0.5)
+- [Documentation](http://www.rubydoc.info/gems/gen-text/0.0.7)
 - [Source code](https://github.com/LavirtheWhiolet/gen-text)
