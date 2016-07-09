@@ -67,9 +67,7 @@ module GenText
               [
                 *generated_from(rule.pos),
                 rule_labels[rule.name],
-                [:new_local_vars],
                 *rule.body.to_vm_code(Context.new(new_binding, rule_labels)),
-                [:restore_local_vars],
                 [:ret]
               ]
             end.reduce(:concat)
@@ -265,7 +263,7 @@ module GenText
           *generated_from(pos),
           [:push_pos],
           *expr.to_vm_code(context),
-          [:capture, var_name]
+          [:capture, context.rule_scope, var_name, false]
         ]
       end
       

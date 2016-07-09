@@ -38,7 +38,6 @@ module GenText
       @out = out
       @pc = 0
       @halted = false
-      @local_vars = {}
       # Run.
       STDERR.puts "RUN TRACE:" if $DEBUG
       until halted?
@@ -169,44 +168,33 @@ module GenText
       @pc += 1
     end
     
-    # @return [Hash<String, String>] variables set by {#capture}.
-    attr_reader :local_vars
-    
-    # {#local_vars}[+name+] = substring of {#out} from {#pop} to current
-    # {IO#pos}.
+    # - p := {#pop};
+    # - +binding_+.eval(set variable named +name+ to a substring of {#out} from
+    #   p to current position);
+    # - if +discard_output+ is true then set {IO#pos} of {#out} to p.
     # 
+    # @param [Binding] binding_
     # @param [String] name
+    # @param [Boolean] discard_output
     # @return [void]
-    def capture(name)
-      @local_vars[name] = begin
-        current_pos = @out.pos
-        @out.pos = @stack.pop
-        r = @out.read(current_pos - @out.pos)
-        @out.pos = current_pos
-        r
+    def capture(binding_, name, discard_output)
+      capture_start_pos = @stack.pop
+      capture_end_pos = @out.pos
+      captured_string = begin
+        @out.pos = capture_start_pos
+        @out.read(capture_end_pos - capture_start_pos)
       end
+      @out.pos =
+        if discard_output then
+          capture_start_pos
+        else
+          capture_end_pos
+        end
+      binding_.eval("#{name} = #{captured_string.inspect}")
       @pc += 1
     end
     
-    # {#push}({#local_vars});
-    # {#local_vars} = empty;
-    # 
-    # @return [void]
-    def new_local_vars
-      @stack.push(@local_vars)
-      @local_vars = {}
-      @pc += 1
-    end
-    
-    # {#local_vars} = {#pop}
-    # 
-    # @return [void]
-    def restore_local_vars
-      @local_vars = @stack.pop
-      @pc += 1
-    end
-    
-    # {#push}(eval({#local_vars} + +ruby_code+, +file+, +line+))
+    # {#push}(eval(+ruby_code+, +file+, +line+))
     # 
     # @param [Binding] binding_
     # @param [String] ruby_code
@@ -214,32 +202,7 @@ module GenText
     # @param [Integer] line original line of +ruby_code+.
     # @return [void]
     def eval_ruby_code(binding_, ruby_code, file, line)
-      # Put local_vars into binding_.
-      begin
-        # TODO: Use Binding#local_variable_set(...).
-        binding_.eval(
-          @local_vars.map { |name, value| "#{name} = #{value.inspect};" }.join
-        )
-      end
-      # Evaluate the code in binding_ and push the result.
       @stack.push binding_.eval(ruby_code, file, line)
-      # Update local_vars from binding_.
-      begin
-        # TODO: Use Binding#local_variable_get(...).
-        local_var_names = @local_vars.keys
-        local_var_values = *binding_.eval("[#{local_var_names.join(", ")}]")
-        local_var_names.zip(local_var_values).each do |name, value|
-          unless value.is_a? String or value.is_a? Numeric then
-            binding_.eval(
-              "raise %(captured variables can be set to a string or a number only: #{name} = #{value.inspect})",
-              file,
-              line
-            )
-          end
-          @local_vars[name] = value
-        end
-      end
-      # 
       @pc += 1
     end
     
@@ -251,12 +214,12 @@ module GenText
       @pc += 1
     end
     
-    # {#push}({#out}'s {IO#pos}, {#pc} as {RescuePoint}, {#local_vars})
+    # {#push}({#out}'s {IO#pos}, {#pc} as {RescuePoint})
     # 
     # @param [Integer, nil] pc if specified then it is pushed instead of {#pc}.
     # @return [void]
     def push_rescue_point(pc = nil)
-      @stack.push RescuePoint[(pc or @pc), @out.pos, @local_vars.dup]
+      @stack.push RescuePoint[(pc or @pc), @out.pos]
       @pc += 1
     end
     
@@ -273,7 +236,6 @@ module GenText
         rescue_point = @stack.pop
         @pc = rescue_point.pc
         @out.pos = rescue_point.out_pos
-        @local_vars = rescue_point.local_vars
       end
     end
     
@@ -317,7 +279,7 @@ module GenText
       end
     end
     
-    RescuePoint = Struct.new :pc, :out_pos, :local_vars
+    RescuePoint = Struct.new :pc, :out_pos
     
     private
     
