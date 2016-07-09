@@ -256,14 +256,14 @@ module GenText
       
     end
     
-    Capture = ASTNode.new :var_name, :expr do
+    Capture = ASTNode.new :var_name, :expr, :discard_output do
       
       def to_vm_code(context)
         [
           *generated_from(pos),
           [:push_pos],
           *expr.to_vm_code(context),
-          [:capture, context.rule_scope, var_name, false]
+          [:capture, context.rule_scope, var_name, discard_output]
         ]
       end
       
@@ -399,7 +399,14 @@ module GenText
     end
     
     rule :capture do
-      _{ n = ruby_var_name and colon and e = repeat and _(Capture[n, e]) } or
+      _{
+        n = ruby_var_name and
+        d = (
+          _{ colon_eq and :discard_output } or
+          _{ colon and :do_not_discard_output }
+        ) and
+        e = repeat and _(Capture[n, e, (d == :discard_output)])
+      } or
       _{ repeat }
     end
     
@@ -475,6 +482,7 @@ module GenText
     token :dot, "."
     token :larrow, "<-"
     token :colon, ":"
+    token :colon_eq, ":="
     
     # Parses "#{start} #{code_part} } #{whitespace_and_comments}".
     # Returns the code_part.
