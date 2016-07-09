@@ -198,8 +198,6 @@ You may use the following expressions in the rules' right part:
   </tbody>
 </table>
 
-TODO: Capture the generated output.
-
 ### Alternate syntax ###
 
 You may use "<-" instead of "=":
