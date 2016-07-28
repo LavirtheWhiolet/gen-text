@@ -286,14 +286,9 @@ module GenText
     # @param [Array<Array<(Numeric, Object)>>] weights_and_items
     # @return [Array<(Numeric, Object)>]
     def sample_weighed(weights_and_items)
-      weight_sum = weights_and_items.map(&:first).reduce(:+)
-      chosen_partial_weight_sum = rand(0...weight_sum)
-      current_partial_weight_sum = 0
-      weights_and_items.find do |weight, item|
-        current_partial_weight_sum += weight
-        current_partial_weight_sum > chosen_partial_weight_sum
-      end or
-      weights_and_items.last
+      # The algorithm is described in
+      # http://utopia.duth.gr/~pefraimi/research/data/2007EncOfAlg.pdf
+      weights_and_items.max_by { |weight, item| rand ** (1.0 / weight) }
     end
     
     def inspect_instruction(instruction)

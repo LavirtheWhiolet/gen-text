@@ -1,7 +1,7 @@
 
 Gem::Specification.new do |s|
   s.name        = 'gen-text'
-  s.version     = '0.0.7'
+  s.version     = '0.0.8'
   s.licenses    = ['MIT']
   s.summary     = "Random texts generator based on EBNF-like grammars."
   s.description = <<-TEXT
